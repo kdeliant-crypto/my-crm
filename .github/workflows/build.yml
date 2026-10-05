@@ -27,13 +27,23 @@ jobs:
       - name: Create Android files if missing
         run: |
           flutter create . --platforms=android
-          echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
+          cat << 'EOF' >> android/build.gradle
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 36
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --android-project-arg=android.compileSdkVersion=36
+        run: flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
