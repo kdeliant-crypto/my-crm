@@ -9,12 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  shared_preferences: ^2.2.2
-  excel: ^4.0.0
+  excel: ^4.0.6
   file_picker: ^8.0.0
-  path_provider: ^2.1.2
-  url_launcher: ^6.2.4
-  share_plus: ^8.0.0
+  share_plus: ^10.0.0
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:
