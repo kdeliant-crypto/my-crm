@@ -23,8 +23,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+
       - name: Create Android files if missing
-        run: flutter create . --platforms=android
+        run: |
+          flutter create . --platforms=android
+          sed -i 's/flutter.compileSdkVersion/36/g' android/app/build.gradle || true
+          sed -i 's/compileSdk = .*/compileSdk = 36/' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
 
       - name: Install dependencies
         run: flutter pub get
