@@ -1,4 +1,4 @@
-import 'io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
@@ -17,7 +17,7 @@ class CRMApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'My CRM',
-      themeData: ThemeData(
+      theme: ThemeData(
         colorSchemeSeed: Colors.blue,
         useMaterial3: true,
       ),
@@ -57,13 +57,13 @@ class Client {
 }
 
 String _removeAccents(String str) {
-  const withAccents = 'ΑΕΗΟΥΩΆΈΉΊΌΎΏΑΕΗΟΥΩαεηουωάέήίόύώ';
-  const withoutAccents = 'ΑΕΗΟΥΩΑΕΗΟΥΩΑΕΗΟΥΩαεηουωαεηουωαεηουω';
+  const withAccents = 'ΆΈΉΊΌΎΏάέήίόύώ';
+  const withoutAccents = 'ΑΕΗΟΥΩαεηιουω';
   String result = str;
   for (int i = 0; i < withAccents.length; i++) {
     result = result.replaceAll(withAccents[i], withoutAccents[i]);
   }
-  return result;
+  return result.toLowerCase();
 }
 
 class ClientListScreen extends StatefulWidget {
@@ -79,7 +79,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
       id: '1',
       fullName: 'Γιώργος Παπαδόπουλος',
       phone: '6912345678',
-      address: 'Aθήνα',
+      address: 'Αθήνα',
       createdDate: DateTime.now().subtract(const Duration(days: 5)),
       interactions: [
         Interaction(
@@ -104,11 +104,11 @@ class _ClientListScreenState extends State<ClientListScreen> {
     if (_searchQuery.isEmpty) {
       return _clients;
     }
-    final query = _removeAccents(_searchQuery.toLowerCase());
+    final query = _removeAccents(_searchQuery);
     return _clients.where((client) {
-      final name = _removeAccents(client.fullName.toLowerCase());
-      final phone = _removeAccents(client.phone.toLowerCase());
-      final address = _removeAccents(client.address.toLowerCase());
+      final name = _removeAccents(client.fullName);
+      final phone = client.phone;
+      final address = _removeAccents(client.address);
       return name.contains(query) || phone.contains(query) || address.contains(query);
     }).toList();
   }
@@ -135,43 +135,44 @@ class _ClientListScreenState extends State<ClientListScreen> {
   }
 
   Future<void> _exportToExcel() async {
-    var excel = Excel.createExcel();
-    Sheet sheetObject = excel['Clients'];
-    excel.delete('Sheet1');
-
-    sheetObject.appendRow([
-      TextCellValue('ID'),
-      TextCellValue('Ονοματεπώνυμο'),
-      TextCellValue('Τηλέφωνο'),
-      TextCellValue('Διεύθυνση'),
-      TextCellValue('Ημερομηνία Δημιουργίας')
-    ]);
-
-    for (var client in _clients) {
-      sheetObject.appendRow([
-        TextCellValue(client.id),
-        TextCellValue(client.fullName),
-        TextCellValue(client.phone),
-        TextCellValue(client.address),
-        TextCellValue(client.createdDate.toIso8601String()),
-      ]);
-    }
-
     try {
+      var excel = Excel.createExcel();
+      Sheet sheetObject = excel['Clients'];
+      excel.setDefaultSheet('Clients');
+
+      sheetObject.appendRow([
+        TextCellValue('ID'),
+        TextCellValue('Ονοματεπώνυμο'),
+        TextCellValue('Τηλέφωνο'),
+        TextCellValue('Διεύθυνση'),
+        TextCellValue('Ημερομηνία Δημιουργίας')
+      ]);
+
+      for (var client in _clients) {
+        sheetObject.appendRow([
+          TextCellValue(client.id),
+          TextCellValue(client.fullName),
+          TextCellValue(client.phone),
+          TextCellValue(client.address),
+          TextCellValue(client.createdDate.toIso8601String()),
+        ]);
+      }
+
       var fileBytes = excel.save();
       if (fileBytes != null) {
-        final directory = await getApplicationDocumentsDirectory();
+        final directory = await getTemporaryDirectory();
         final path = '${directory.path}/crm_clients.xlsx';
-        File(path)
-          ..createSync(recursive: true)
-          ..writeAsBytesSync(fileBytes);
+        final file = File(path);
+        await file.writeAsBytes(fileBytes);
 
         await Share.shareXFiles([XFile(path)], text: 'Εξαγωγή Πελατών CRM');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Σφάλμα εξαγωγής: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Σφάλμα εξαγωγής: $e')),
+        );
+      }
     }
   }
 
@@ -179,7 +180,39 @@ class _ClientListScreenState extends State<ClientListScreen> {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['xlsx'],
+        allowedExtensions: ['xlsx', 'xls'],
       );
 
-      if
+      if (result != null && result.files.single.path != null) {
+        var bytes = await File(result.files.single.path!).readAsBytes();
+        var excel = Excel.decodeBytes(bytes);
+
+        int importedCount = 0;
+        for (var table in excel.tables.keys) {
+          var sheet = excel.tables[table];
+          if (sheet == null) continue;
+
+          for (var i = 1; i < sheet.rows.length; i++) {
+            var row = sheet.rows[i];
+            if (row.isNotEmpty && row[0] != null) {
+              String name = row.length > 1 ? row[1]?.value?.toString() ?? '' : '';
+              String phone = row.length > 2 ? row[2]?.value?.toString() ?? '' : '';
+              String address = row.length > 3 ? row[3]?.value?.toString() ?? '' : '';
+
+              if (name.isNotEmpty) {
+                _clients.add(Client(
+                  id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
+                  fullName: name,
+                  phone: phone,
+                  address: address,
+                  createdDate: DateTime.now(),
+                ));
+                importedCount++;
+              }
+            }
+          }
+        }
+
+        setState(() {});
+        if (mounted) {
+          ScaffoldMessenger.of
