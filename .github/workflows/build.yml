@@ -20,6 +20,12 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Fix Kotlin dependencies
+        run: |
+          cd android
+          sed -i '/allprojects {/a\    configurations.all { resolutionStrategy.eachDependency { DependencyResolveDetails details -> if (details.requested.group == "org.jetbrains.kotlin") { details.useVersion "1.8.22" } } }' build.gradle
+          cd ..
+
       - run: cd android && ./gradlew clean && cd ..
 
       - run: flutter build apk --release
