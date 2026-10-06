@@ -19,8 +19,7 @@ jobs:
       - run: flutter pub get
 
 
-      - run: flutter pub upgrade
-
+      - run: flutter clean
   
       - run: flutter build apk --release
 
