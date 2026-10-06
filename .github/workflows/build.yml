@@ -17,10 +17,7 @@ jobs:
           channel: 'stable'
       - run: flutter create . --project-name=my_crm --platforms=android
       - run: flutter pub get
-
-
-       - run: flutter pub get
-       - run: flutter pub upgrade --major-versions
+      - run: flutter pub upgrade --major-versions
       - run: flutter build apk --release
 
       - name: Upload APK Artifact
@@ -28,7 +25,3 @@ jobs:
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-
- 
-
-# update
