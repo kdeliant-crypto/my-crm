@@ -19,8 +19,9 @@ jobs:
       - run: flutter pub get
 
 
-      - run: flutter pub upgrade --major-versions
+      - run: flutter pub upgrade
 
+  
       - run: flutter build apk --release
 
       - name: Upload APK Artifact
