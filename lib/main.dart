@@ -44,7 +44,7 @@ class Client {
   final String phone;
   final String address;
   final DateTime createdDate;
-  final List<Interaction> interactions;
+  final List<Interaction>? interactions;
 
   Client({
     required this.id,
@@ -52,13 +52,13 @@ class Client {
     required this.phone,
     required this.address,
     required this.createdDate,
-    List<Interaction>? interactions,
-  }) : interactions = interactions ?? [];
+    this.interactions,
+  });
 }
 
 String _removeAccents(String str) {
-  const withAccents = 'ΆΈΉΊΌΎΏάέήίόύώ';
-  const withoutAccents = 'ΑΕΗΟΥΩαεηιουω';
+  const withAccents = 'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΆΈΉΊΌΎΏ';
+  const withoutAccents = 'αβγδεζηθικλμνξοπρστυφχψωαεηιουω';
   String result = str;
   for (int i = 0; i < withAccents.length; i++) {
     result = result.replaceAll(withAccents[i], withoutAccents[i]);
@@ -86,7 +86,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
           type: 'Τηλεφώνημα',
           date: DateTime.now().subtract(const Duration(days: 2)),
           notes: 'Συζήτηση για προσφορά.',
-        )
+        ),
       ],
     ),
     Client(
@@ -145,7 +145,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
         TextCellValue('Ονοματεπώνυμο'),
         TextCellValue('Τηλέφωνο'),
         TextCellValue('Διεύθυνση'),
-        TextCellValue('Ημερομηνία Δημιουργίας')
+        TextCellValue('Ημερομηνία Δημιουργίας'),
       ]);
 
       for (var client in _clients) {
@@ -212,7 +212,88 @@ class _ClientListScreenState extends State<ClientListScreen> {
             }
           }
         }
-
         setState(() {});
         if (mounted) {
-          ScaffoldMessenger.of
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Εισαγωγή επιτυχής!')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Σφάλμα εισαγωγής: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My CRM - Πελάτες'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.file_upload),
+            onPressed: _importFromExcel,
+            tooltip: 'Εισαγωγή από Excel',
+          ),
+          IconButton(
+            icon: const Icon(Icons.file_download),
+            onPressed: _exportToExcel,
+            tooltip: 'Εξαγωγή σε Excel',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+              decoration: const InputDecoration(
+                labelText: 'Αζήτηση Πελάτη',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _filteredClients.length,
+              itemBuilder: (context, index) {
+                final client = _filteredClients[index];
+                return ListTile(
+                  title: Text(client.fullName),
+                  subtitle: Text('${client.phone} - ${client.address}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => _deleteClient(client.id),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Δοκιμαστική προσθήκη νέου πελάτη για τεστ
+          _addClient(Client(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            fullName: 'Νέος Πελάτης',
+            phone: '6900000000',
+            address: 'Θεσσαλονίκη',
+            createdDate: DateTime.now(),
+          ));
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
