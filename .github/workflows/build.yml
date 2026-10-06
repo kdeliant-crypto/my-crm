@@ -18,7 +18,9 @@ jobs:
       - run: flutter create . --project-name=my_crm --platforms=android
       - run: flutter pub get
 
-      
+
+      - run: flutter pub upgrade --major-versions
+
       - run: flutter build apk --release
 
       - name: Upload APK Artifact
