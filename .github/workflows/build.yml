@@ -15,7 +15,7 @@ jobs:
         with:
           flutter-version: '3.19.x'
           channel: 'stable'
-      - run: Run flutter create . --project-name=my_crm --platforms=android
+      - run: flutter create . --project-name=my_crm --platforms=android
       - run: flutter pub get
 
       
