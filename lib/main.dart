@@ -62,7 +62,9 @@ class Interaction {
     return Interaction(
       id: json['id']?.toString() ?? '',
       type: json['type']?.toString() ?? 'Τηλεφώνημα',
-      date: DateTime.tryParse(json['date']?.toString() ?? '') ??
+      date: DateTime.tryParse(
+            json['date']?.toString() ?? '',
+          ) ??
           DateTime.now(),
       notes: json['notes']?.toString() ?? '',
     );
@@ -152,7 +154,10 @@ String removeAccents(String str) {
   String result = str;
 
   for (int i = 0; i < withAccents.length; i++) {
-    result = result.replaceAll(withAccents[i], withoutAccents[i]);
+    result = result.replaceAll(
+      withAccents[i],
+      withoutAccents[i],
+    );
   }
 
   return result.toLowerCase();
@@ -200,7 +205,10 @@ class _ClientListScreenState extends State<ClientListScreen> {
 
   Future<File> _getStorageFile() async {
     final directory = await getApplicationDocumentsDirectory();
-    return File('${directory.path}/ergasies_pelaton.json');
+
+    return File(
+      '${directory.path}/ergasies_pelaton.json',
+    );
   }
 
   Future<void> _loadClients() async {
@@ -244,7 +252,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
       final file = await _getStorageFile();
 
       final data = _clients
-          .map((client) => client.toJson())
+          .map(
+            (client) => client.toJson(),
+          )
           .toList();
 
       await file.writeAsString(
@@ -255,10 +265,6 @@ class _ClientListScreenState extends State<ClientListScreen> {
       debugPrint('Σφάλμα αποθήκευσης: $e');
     }
   }
-
-  // ----------------------------------------------------------
-  // INIT
-  // ----------------------------------------------------------
 
   @override
   void initState() {
@@ -275,7 +281,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
       return _clients;
     }
 
-    final query = removeAccents(_searchQuery.trim());
+    final query = removeAccents(
+      _searchQuery.trim(),
+    );
 
     return _clients.where((client) {
       final name = removeAccents(client.fullName);
@@ -316,14 +324,16 @@ class _ClientListScreenState extends State<ClientListScreen> {
 
   Future<void> _deleteClient(String id) async {
     setState(() {
-      _clients.removeWhere((client) => client.id == id);
+      _clients.removeWhere(
+        (client) => client.id == id,
+      );
     });
 
     await _saveClients();
   }
 
   // ----------------------------------------------------------
-  // ADD CLIENT DIALOG
+  // ADD CLIENT
   // ----------------------------------------------------------
 
   Future<void> _showAddClientDialog() async {
@@ -382,7 +392,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Συμπλήρωσε το ονοματεπώνυμο.'),
+                      content: Text(
+                        'Συμπλήρωσε το ονοματεπώνυμο.',
+                      ),
                     ),
                   );
                   return;
@@ -453,7 +465,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
           TextCellValue(client.fullName),
           TextCellValue(client.phone),
           TextCellValue(client.address),
-          TextCellValue(formatDate(client.createdDate)),
+          TextCellValue(
+            formatDate(client.createdDate),
+          ),
         ]);
       }
 
@@ -474,8 +488,12 @@ class _ClientListScreenState extends State<ClientListScreen> {
             TextCellValue(client.id),
             TextCellValue(client.fullName),
             TextCellValue(interaction.type),
-            TextCellValue(formatDate(interaction.date)),
-            TextCellValue(formatTime(interaction.date)),
+            TextCellValue(
+              formatDate(interaction.date),
+            ),
+            TextCellValue(
+              formatTime(interaction.date),
+            ),
             TextCellValue(interaction.notes),
           ]);
         }
@@ -485,9 +503,12 @@ class _ClientListScreenState extends State<ClientListScreen> {
 
       if (fileBytes != null) {
         final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/ergasies_pelaton.xlsx';
+
+        final path =
+            '${directory.path}/ergasies_pelaton.xlsx';
 
         final file = File(path);
+
         await file.writeAsBytes(fileBytes);
 
         await Share.shareXFiles(
@@ -499,7 +520,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Σφάλμα εξαγωγής: $e'),
+            content: Text(
+              'Σφάλμα εξαγωγής: $e',
+            ),
           ),
         );
       }
@@ -522,58 +545,57 @@ class _ClientListScreenState extends State<ClientListScreen> {
         return;
       }
 
-      final bytes =
-          await File(result.files.single.path!).readAsBytes();
+      final bytes = await File(
+        result.files.single.path!,
+      ).readAsBytes();
 
       final excel = Excel.decodeBytes(bytes);
 
       int importedCount = 0;
 
-      for (final tableName in excel.tables.keys) {
-        final sheet = excel.tables[tableName];
+      // Εισάγουμε μόνο από το φύλλο Clients.
+      final sheet = excel.tables['Clients'];
 
-        if (sheet == null) {
+      if (sheet == null) {
+        throw Exception(
+          'Δεν βρέθηκε φύλλο με όνομα Clients.',
+        );
+      }
+
+      for (int i = 1; i < sheet.rows.length; i++) {
+        final row = sheet.rows[i];
+
+        if (row.isEmpty) {
           continue;
         }
 
-        for (int i = 1; i < sheet.rows.length; i++) {
-          final row = sheet.rows[i];
+        final name = row.length > 1
+            ? row[1]?.value?.toString().trim() ?? ''
+            : '';
 
-          if (row.isEmpty) {
-            continue;
-          }
+        final phone = row.length > 2
+            ? row[2]?.value?.toString().trim() ?? ''
+            : '';
 
-          final name =
-              row.length > 1
-                  ? row[1]?.value?.toString().trim() ?? ''
-                  : '';
+        final address = row.length > 3
+            ? row[3]?.value?.toString().trim() ?? ''
+            : '';
 
-          final phone =
-              row.length > 2
-                  ? row[2]?.value?.toString().trim() ?? ''
-                  : '';
-
-          final address =
-              row.length > 3
-                  ? row[3]?.value?.toString().trim() ?? ''
-                  : '';
-
-          if (name.isEmpty) {
-            continue;
-          }
-
-          _clients.add(
-            Client(
-              id: generateId(),
-              fullName: name,
-              phone: phone,
-              address: address,
-              createdDate: DateTime.now(),
-            ),
-          );
-
-          importedCount++;
+        if (name.isEmpty) {
+          continue;
         }
+
+        _clients.add(
+          Client(
+            id: generateId(),
+            fullName: name,
+            phone: phone,
+            address: address,
+            createdDate: DateTime.now(),
+          ),
+        );
+
+        importedCount++;
       }
 
       await _saveClients();
@@ -593,7 +615,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Σφάλμα εισαγωγής: $e'),
+            content: Text(
+              'Σφάλμα εισαγωγής: $e',
+            ),
           ),
         );
       }
@@ -601,7 +625,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
   }
 
   // ----------------------------------------------------------
-  // DELETE CONFIRMATION
+  // DELETE CLIENT
   // ----------------------------------------------------------
 
   Future<void> _confirmDelete(Client client) async {
@@ -618,6 +642,622 @@ class _ClientListScreenState extends State<ClientListScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext, false);
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
               },
               child: const Text('Άκυρο'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
+              },
+              child: const Text('Διαγραφή'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _deleteClient(client.id);
+    }
+  }
+
+  // ----------------------------------------------------------
+  // BUILD
+  // ----------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Εργασίες Πελατών'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'export') {
+                _exportToExcel();
+              }
+
+              if (value == 'import') {
+                _importFromExcel();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'export',
+                child: Text('Εξαγωγή Excel'),
+              ),
+              PopupMenuItem(
+                value: 'import',
+                child: Text('Εισαγωγή Excel'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Αναζήτηση Πελάτη',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _filteredClients.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Δεν υπάρχουν πελάτες.',
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _filteredClients.length,
+                          itemBuilder: (context, index) {
+                            final client =
+                                _filteredClients[index];
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 5,
+                              ),
+                              child: ListTile(
+                                leading: const CircleAvatar(
+                                  child: Icon(Icons.person),
+                                ),
+                                title: Text(
+                                  client.fullName,
+                                ),
+                                subtitle: Text(
+                                  [
+                                    if (client.phone.isNotEmpty)
+                                      client.phone,
+                                    if (client.address.isNotEmpty)
+                                      client.address,
+                                    'Ιστορικό: ${client.interactions.length}',
+                                  ].join('\n'),
+                                ),
+                                isThreeLine: true,
+                                onTap: () {
+                                  _openClient(client);
+                                },
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                  ),
+                                  onPressed: () {
+                                    _confirmDelete(client);
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddClientDialog,
+        icon: const Icon(Icons.person_add),
+        label: const Text('Νέος Πελάτης'),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CLIENT DETAILS
+// ============================================================
+
+class ClientDetailsScreen extends StatefulWidget {
+  final Client client;
+  final Future<void> Function(Client client) onClientChanged;
+
+  const ClientDetailsScreen({
+    super.key,
+    required this.client,
+    required this.onClientChanged,
+  });
+
+  @override
+  State<ClientDetailsScreen> createState() =>
+      _ClientDetailsScreenState();
+}
+
+class _ClientDetailsScreenState
+    extends State<ClientDetailsScreen> {
+  late Client _client;
+
+  @override
+  void initState() {
+    super.initState();
+    _client = widget.client;
+  }
+
+  // ----------------------------------------------------------
+  // ADD INTERACTION
+  // ----------------------------------------------------------
+
+  Future<void> _addInteraction({
+    required String initialType,
+  }) async {
+    DateTime selectedDate = DateTime.now();
+    TimeOfDay selectedTime = TimeOfDay.now();
+
+    String selectedType = initialType;
+
+    final notesController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(
+                initialType == 'Επίσκεψη'
+                    ? 'Νέα Επίσκεψη'
+                    : 'Νέο Τηλεφώνημα',
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      decoration: const InputDecoration(
+                        labelText: 'Τύπος',
+                        prefixIcon: Icon(
+                          Icons.category,
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Τηλεφώνημα',
+                          child: Text('Τηλεφώνημα'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Επίσκεψη',
+                          child: Text('Επίσκεψη'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedType = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.calendar_today,
+                      ),
+                      title: const Text('Ημερομηνία'),
+                      subtitle: Text(
+                        formatDate(selectedDate),
+                      ),
+                      onTap: () async {
+                        final picked =
+                            await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+
+                        if (picked != null) {
+                          setDialogState(() {
+                            selectedDate = DateTime(
+                              picked.year,
+                              picked.month,
+                              picked.day,
+                              selectedDate.hour,
+                              selectedDate.minute,
+                            );
+                          });
+                        }
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.access_time,
+                      ),
+                      title: const Text('Ώρα'),
+                      subtitle: Text(
+                        selectedTime.format(context),
+                      ),
+                      onTap: () async {
+                        final picked =
+                            await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime,
+                        );
+
+                        if (picked != null) {
+                          setDialogState(() {
+                            selectedTime = picked;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: notesController,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Σχόλιο / Εργασία',
+                        hintText:
+                            'Τι ζήτησε ο πελάτης ή τι εργασία έγινε;',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Άκυρο'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final interactionDate = DateTime(
+                      selectedDate.year,
+                      selectedDate.month,
+                      selectedDate.day,
+                      selectedTime.hour,
+                      selectedTime.minute,
+                    );
+
+                    final interaction = Interaction(
+                      id: generateId(),
+                      type: selectedType,
+                      date: interactionDate,
+                      notes: notesController.text.trim(),
+                    );
+
+                    final updatedInteractions = [
+                      ..._client.interactions,
+                      interaction,
+                    ];
+
+                    final updatedClient =
+                        _client.copyWith(
+                      interactions: updatedInteractions,
+                    );
+
+                    Navigator.pop(dialogContext);
+
+                    setState(() {
+                      _client = updatedClient;
+                    });
+
+                    await widget.onClientChanged(
+                      updatedClient,
+                    );
+                  },
+                  child: const Text('Αποθήκευση'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    notesController.dispose();
+  }
+
+  // ----------------------------------------------------------
+  // DELETE INTERACTION
+  // ----------------------------------------------------------
+
+  Future<void> _deleteInteraction(
+    Interaction interaction,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Διαγραφή εγγραφής'),
+          content: const Text(
+            'Θέλεις να διαγράψεις αυτή την εγγραφή '
+            'από το ιστορικό;',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
+              },
+              child: const Text('Άκυρο'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
+              },
+              child: const Text('Διαγραφή'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final updatedInteractions =
+        _client.interactions
+            .where(
+              (item) => item.id != interaction.id,
+            )
+            .toList();
+
+    final updatedClient = _client.copyWith(
+      interactions: updatedInteractions,
+    );
+
+    setState(() {
+      _client = updatedClient;
+    });
+
+    await widget.onClientChanged(
+      updatedClient,
+    );
+  }
+
+  // ----------------------------------------------------------
+  // BUILD
+  // ----------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    final sortedInteractions =
+        List<Interaction>.from(
+      _client.interactions,
+    );
+
+    sortedInteractions.sort(
+      (a, b) => b.date.compareTo(a.date),
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_client.fullName),
+      ),
+      body: Column(
+        children: [
+          Card(
+            margin: const EdgeInsets.all(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _client.fullName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  if (_client.phone.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(Icons.phone),
+                        const SizedBox(width: 8),
+                        Text(_client.phone),
+                      ],
+                    ),
+                  if (_client.address.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.location_on),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _client.address,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      _addInteraction(
+                        initialType: 'Τηλεφώνημα',
+                      );
+                    },
+                    icon: const Icon(Icons.phone),
+                    label: const Text(
+                      'Τηλεφώνημα',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      _addInteraction(
+                        initialType: 'Επίσκεψη',
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.location_on,
+                    ),
+                    label: const Text(
+                      'Επίσκεψη',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+              12,
+              16,
+              12,
+              8,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Ιστορικό',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          Expanded(
+            child: sortedInteractions.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Δεν υπάρχει ιστορικό για αυτόν τον πελάτη.',
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount:
+                        sortedInteractions.length,
+                    itemBuilder: (context, index) {
+                      final interaction =
+                          sortedInteractions[index];
+
+                      final isPhone =
+                          interaction.type ==
+                              'Τηλεφώνημα';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            child: Icon(
+                              isPhone
+                                  ? Icons.phone
+                                  : Icons.location_on,
+                            ),
+                          ),
+                          title: Text(
+                            interaction.type,
+                          ),
+                          subtitle: Padding(
+                            padding:
+                                const EdgeInsets.only(
+                              top: 6,
+                            ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${formatDate(interaction.date)}  '
+                                  '${formatTime(interaction.date)}',
+                                ),
+                                if (interaction
+                                    .notes
+                                    .isNotEmpty) ...[
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    interaction.notes,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          isThreeLine:
+                              interaction.notes.isNotEmpty,
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                            ),
+                            onPressed: () {
+                              _deleteInteraction(
+                                interaction,
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
