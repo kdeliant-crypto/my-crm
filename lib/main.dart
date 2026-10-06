@@ -620,4 +620,4 @@ class _ClientListScreenState extends State<ClientListScreen> {
               onPressed: () {
                 Navigator.pop(dialogContext, false);
               },
-              child: const Text('Άκυρο
+              child: const Text('Άκυρο'),
