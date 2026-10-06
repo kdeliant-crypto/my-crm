@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +11,10 @@ void main() {
   runApp(const CRMApp());
 }
 
+// ============================================================
+// APP
+// ============================================================
+
 class CRMApp extends StatelessWidget {
   const CRMApp({super.key});
 
@@ -16,7 +22,7 @@ class CRMApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'My CRM',
+      title: 'Εργασίες Πελατών',
       theme: ThemeData(
         colorSchemeSeed: Colors.blue,
         useMaterial3: true,
@@ -26,16 +32,41 @@ class CRMApp extends StatelessWidget {
   }
 }
 
+// ============================================================
+// MODELS
+// ============================================================
+
 class Interaction {
+  final String id;
   final String type;
   final DateTime date;
   final String notes;
 
   Interaction({
+    required this.id,
     required this.type,
     required this.date,
     required this.notes,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type,
+      'date': date.toIso8601String(),
+      'notes': notes,
+    };
+  }
+
+  factory Interaction.fromJson(Map<String, dynamic> json) {
+    return Interaction(
+      id: json['id']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'Τηλεφώνημα',
+      date: DateTime.tryParse(json['date']?.toString() ?? '') ??
+          DateTime.now(),
+      notes: json['notes']?.toString() ?? '',
+    );
+  }
 }
 
 class Client {
@@ -44,7 +75,7 @@ class Client {
   final String phone;
   final String address;
   final DateTime createdDate;
-  final List<Interaction>? interactions;
+  final List<Interaction> interactions;
 
   Client({
     required this.id,
@@ -52,19 +83,103 @@ class Client {
     required this.phone,
     required this.address,
     required this.createdDate,
-    this.interactions,
-  });
+    List<Interaction>? interactions,
+  }) : interactions = interactions ?? [];
+
+  Client copyWith({
+    String? fullName,
+    String? phone,
+    String? address,
+    DateTime? createdDate,
+    List<Interaction>? interactions,
+  }) {
+    return Client(
+      id: id,
+      fullName: fullName ?? this.fullName,
+      phone: phone ?? this.phone,
+      address: address ?? this.address,
+      createdDate: createdDate ?? this.createdDate,
+      interactions: interactions ?? this.interactions,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'fullName': fullName,
+      'phone': phone,
+      'address': address,
+      'createdDate': createdDate.toIso8601String(),
+      'interactions':
+          interactions.map((interaction) => interaction.toJson()).toList(),
+    };
+  }
+
+  factory Client.fromJson(Map<String, dynamic> json) {
+    final interactionList = json['interactions'];
+
+    return Client(
+      id: json['id']?.toString() ?? '',
+      fullName: json['fullName']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      createdDate: DateTime.tryParse(
+            json['createdDate']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+      interactions: interactionList is List
+          ? interactionList
+              .whereType<Map>()
+              .map(
+                (item) => Interaction.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
+          : [],
+    );
+  }
 }
 
-String _removeAccents(String str) {
+// ============================================================
+// HELPERS
+// ============================================================
+
+String removeAccents(String str) {
   const withAccents = 'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΆΈΉΊΌΎΏ';
   const withoutAccents = 'αβγδεζηθικλμνξοπρστυφχψωαεηιουω';
+
   String result = str;
+
   for (int i = 0; i < withAccents.length; i++) {
     result = result.replaceAll(withAccents[i], withoutAccents[i]);
   }
+
   return result.toLowerCase();
 }
+
+String formatDate(DateTime date) {
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final year = date.year.toString();
+
+  return '$day/$month/$year';
+}
+
+String formatTime(DateTime date) {
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+
+  return '$hour:$minute';
+}
+
+String generateId() {
+  return DateTime.now().microsecondsSinceEpoch.toString();
+}
+
+// ============================================================
+// CLIENT LIST SCREEN
+// ============================================================
 
 class ClientListScreen extends StatefulWidget {
   const ClientListScreen({super.key});
@@ -74,73 +189,257 @@ class ClientListScreen extends StatefulWidget {
 }
 
 class _ClientListScreenState extends State<ClientListScreen> {
-  final List<Client> _clients = [
-    Client(
-      id: '1',
-      fullName: 'Γιώργος Παπαδόπουλος',
-      phone: '6912345678',
-      address: 'Αθήνα',
-      createdDate: DateTime.now().subtract(const Duration(days: 5)),
-      interactions: [
-        Interaction(
-          type: 'Τηλεφώνημα',
-          date: DateTime.now().subtract(const Duration(days: 2)),
-          notes: 'Συζήτηση για προσφορά.',
-        ),
-      ],
-    ),
-    Client(
-      id: '2',
-      fullName: 'Maria Kouveli',
-      phone: '6987654321',
-      address: 'Θεσσαλονίκη',
-      createdDate: DateTime.now().subtract(const Duration(days: 10)),
-    ),
-  ];
+  final List<Client> _clients = [];
 
   String _searchQuery = '';
+  bool _loading = true;
+
+  // ----------------------------------------------------------
+  // STORAGE
+  // ----------------------------------------------------------
+
+  Future<File> _getStorageFile() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}/ergasies_pelaton.json');
+  }
+
+  Future<void> _loadClients() async {
+    try {
+      final file = await _getStorageFile();
+
+      if (await file.exists()) {
+        final content = await file.readAsString();
+
+        if (content.trim().isNotEmpty) {
+          final decoded = jsonDecode(content);
+
+          if (decoded is List) {
+            _clients.clear();
+
+            for (final item in decoded) {
+              if (item is Map) {
+                _clients.add(
+                  Client.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                );
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Σφάλμα φόρτωσης: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _saveClients() async {
+    try {
+      final file = await _getStorageFile();
+
+      final data = _clients
+          .map((client) => client.toJson())
+          .toList();
+
+      await file.writeAsString(
+        jsonEncode(data),
+        flush: true,
+      );
+    } catch (e) {
+      debugPrint('Σφάλμα αποθήκευσης: $e');
+    }
+  }
+
+  // ----------------------------------------------------------
+  // INIT
+  // ----------------------------------------------------------
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClients();
+  }
+
+  // ----------------------------------------------------------
+  // SEARCH
+  // ----------------------------------------------------------
 
   List<Client> get _filteredClients {
-    if (_searchQuery.isEmpty) {
+    if (_searchQuery.trim().isEmpty) {
       return _clients;
     }
-    final query = _removeAccents(_searchQuery);
+
+    final query = removeAccents(_searchQuery.trim());
+
     return _clients.where((client) {
-      final name = _removeAccents(client.fullName);
+      final name = removeAccents(client.fullName);
       final phone = client.phone;
-      final address = _removeAccents(client.address);
-      return name.contains(query) || phone.contains(query) || address.contains(query);
+      final address = removeAccents(client.address);
+
+      return name.contains(query) ||
+          phone.contains(query) ||
+          address.contains(query);
     }).toList();
   }
 
-  void _addClient(Client client) {
+  // ----------------------------------------------------------
+  // CLIENT ACTIONS
+  // ----------------------------------------------------------
+
+  Future<void> _addClient(Client client) async {
     setState(() {
       _clients.add(client);
     });
+
+    await _saveClients();
   }
 
-  void _updateClient(Client updatedClient) {
-    setState(() {
-      final index = _clients.indexWhere((c) => c.id == updatedClient.id);
-      if (index != -1) {
+  Future<void> _updateClient(Client updatedClient) async {
+    final index = _clients.indexWhere(
+      (client) => client.id == updatedClient.id,
+    );
+
+    if (index != -1) {
+      setState(() {
         _clients[index] = updatedClient;
-      }
-    });
+      });
+
+      await _saveClients();
+    }
   }
 
-  void _deleteClient(String id) {
+  Future<void> _deleteClient(String id) async {
     setState(() {
-      _clients.removeWhere((c) => c.id == id);
+      _clients.removeWhere((client) => client.id == id);
     });
+
+    await _saveClients();
   }
+
+  // ----------------------------------------------------------
+  // ADD CLIENT DIALOG
+  // ----------------------------------------------------------
+
+  Future<void> _showAddClientDialog() async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final addressController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Νέος Πελάτης'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Ονοματεπώνυμο',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Τηλέφωνο',
+                    prefixIcon: Icon(Icons.phone),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Διεύθυνση',
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Άκυρο'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Συμπλήρωσε το ονοματεπώνυμο.'),
+                    ),
+                  );
+                  return;
+                }
+
+                final client = Client(
+                  id: generateId(),
+                  fullName: name,
+                  phone: phoneController.text.trim(),
+                  address: addressController.text.trim(),
+                  createdDate: DateTime.now(),
+                );
+
+                Navigator.pop(dialogContext);
+
+                await _addClient(client);
+              },
+              child: const Text('Αποθήκευση'),
+            ),
+          ],
+        );
+      },
+    );
+
+    nameController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+  }
+
+  // ----------------------------------------------------------
+  // OPEN CLIENT
+  // ----------------------------------------------------------
+
+  Future<void> _openClient(Client client) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClientDetailsScreen(
+          client: client,
+          onClientChanged: _updateClient,
+        ),
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------
+  // EXCEL EXPORT
+  // ----------------------------------------------------------
 
   Future<void> _exportToExcel() async {
     try {
-      var excel = Excel.createExcel();
-      Sheet sheetObject = excel['Clients'];
+      final excel = Excel.createExcel();
+
+      final clientsSheet = excel['Clients'];
       excel.setDefaultSheet('Clients');
 
-      sheetObject.appendRow([
+      clientsSheet.appendRow([
         TextCellValue('ID'),
         TextCellValue('Ονοματεπώνυμο'),
         TextCellValue('Τηλέφωνο'),
@@ -148,152 +447,177 @@ class _ClientListScreenState extends State<ClientListScreen> {
         TextCellValue('Ημερομηνία Δημιουργίας'),
       ]);
 
-      for (var client in _clients) {
-        sheetObject.appendRow([
+      for (final client in _clients) {
+        clientsSheet.appendRow([
           TextCellValue(client.id),
           TextCellValue(client.fullName),
           TextCellValue(client.phone),
           TextCellValue(client.address),
-          TextCellValue(client.createdDate.toIso8601String()),
+          TextCellValue(formatDate(client.createdDate)),
         ]);
       }
 
-      var fileBytes = excel.save();
+      final interactionsSheet = excel['Interactions'];
+
+      interactionsSheet.appendRow([
+        TextCellValue('Client ID'),
+        TextCellValue('Πελάτης'),
+        TextCellValue('Τύπος'),
+        TextCellValue('Ημερομηνία'),
+        TextCellValue('Ώρα'),
+        TextCellValue('Σχόλιο'),
+      ]);
+
+      for (final client in _clients) {
+        for (final interaction in client.interactions) {
+          interactionsSheet.appendRow([
+            TextCellValue(client.id),
+            TextCellValue(client.fullName),
+            TextCellValue(interaction.type),
+            TextCellValue(formatDate(interaction.date)),
+            TextCellValue(formatTime(interaction.date)),
+            TextCellValue(interaction.notes),
+          ]);
+        }
+      }
+
+      final fileBytes = excel.save();
+
       if (fileBytes != null) {
         final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/crm_clients.xlsx';
+        final path = '${directory.path}/ergasies_pelaton.xlsx';
+
         final file = File(path);
         await file.writeAsBytes(fileBytes);
 
-        await Share.shareXFiles([XFile(path)], text: 'Εξαγωγή Πελατών CRM');
+        await Share.shareXFiles(
+          [XFile(path)],
+          text: 'Εργασίες Πελατών - Excel',
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Σφάλμα εξαγωγής: $e')),
+          SnackBar(
+            content: Text('Σφάλμα εξαγωγής: $e'),
+          ),
         );
       }
     }
   }
 
+  // ----------------------------------------------------------
+  // EXCEL IMPORT
+  // ----------------------------------------------------------
+
   Future<void> _importFromExcel() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
       );
 
-      if (result != null && result.files.single.path != null) {
-        var bytes = await File(result.files.single.path!).readAsBytes();
-        var excel = Excel.decodeBytes(bytes);
+      if (result == null ||
+          result.files.single.path == null) {
+        return;
+      }
 
-        int importedCount = 0;
-        for (var table in excel.tables.keys) {
-          var sheet = excel.tables[table];
-          if (sheet == null) continue;
+      final bytes =
+          await File(result.files.single.path!).readAsBytes();
 
-          for (var i = 1; i < sheet.rows.length; i++) {
-            var row = sheet.rows[i];
-            if (row.isNotEmpty && row[0] != null) {
-              String name = row.length > 1 ? row[1]?.value?.toString() ?? '' : '';
-              String phone = row.length > 2 ? row[2]?.value?.toString() ?? '' : '';
-              String address = row.length > 3 ? row[3]?.value?.toString() ?? '' : '';
+      final excel = Excel.decodeBytes(bytes);
 
-              if (name.isNotEmpty) {
-                _clients.add(Client(
-                  id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
-                  fullName: name,
-                  phone: phone,
-                  address: address,
-                  createdDate: DateTime.now(),
-                ));
-                importedCount++;
-              }
-            }
+      int importedCount = 0;
+
+      for (final tableName in excel.tables.keys) {
+        final sheet = excel.tables[tableName];
+
+        if (sheet == null) {
+          continue;
+        }
+
+        for (int i = 1; i < sheet.rows.length; i++) {
+          final row = sheet.rows[i];
+
+          if (row.isEmpty) {
+            continue;
           }
-        }
-        setState(() {});
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Εισαγωγή επιτυχής!')),
+
+          final name =
+              row.length > 1
+                  ? row[1]?.value?.toString().trim() ?? ''
+                  : '';
+
+          final phone =
+              row.length > 2
+                  ? row[2]?.value?.toString().trim() ?? ''
+                  : '';
+
+          final address =
+              row.length > 3
+                  ? row[3]?.value?.toString().trim() ?? ''
+                  : '';
+
+          if (name.isEmpty) {
+            continue;
+          }
+
+          _clients.add(
+            Client(
+              id: generateId(),
+              fullName: name,
+              phone: phone,
+              address: address,
+              createdDate: DateTime.now(),
+            ),
           );
+
+          importedCount++;
         }
+      }
+
+      await _saveClients();
+
+      if (mounted) {
+        setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Εισήχθησαν $importedCount πελάτες.',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Σφάλμα εισαγωγής: $e')),
+          SnackBar(
+            content: Text('Σφάλμα εισαγωγής: $e'),
+          ),
         );
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My CRM - Πελάτες'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.file_upload),
-            onPressed: _importFromExcel,
-            tooltip: 'Εισαγωγή από Excel',
+  // ----------------------------------------------------------
+  // DELETE CONFIRMATION
+  // ----------------------------------------------------------
+
+  Future<void> _confirmDelete(Client client) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Διαγραφή πελάτη'),
+          content: Text(
+            'Θέλεις να διαγράψεις τον πελάτη '
+            '${client.fullName};\n\n'
+            'Θα διαγραφεί και όλο το ιστορικό του.',
           ),
-          IconButton(
-            icon: const Icon(Icons.file_download),
-            onPressed: _exportToExcel,
-            tooltip: 'Εξαγωγή σε Excel',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
               },
-              decoration: const InputDecoration(
-                labelText: 'Αζήτηση Πελάτη',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _filteredClients.length,
-              itemBuilder: (context, index) {
-                final client = _filteredClients[index];
-                return ListTile(
-                  title: Text(client.fullName),
-                  subtitle: Text('${client.phone} - ${client.address}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => _deleteClient(client.id),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Δοκιμαστική προσθήκη νέου πελάτη για τεστ
-          _addClient(Client(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            fullName: 'Νέος Πελάτης',
-            phone: '6900000000',
-            address: 'Θεσσαλονίκη',
-            createdDate: DateTime.now(),
-          ));
-        },
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
+              child: const Text('Άκυρο
