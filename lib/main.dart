@@ -620,27 +620,34 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 .replaceAll(RegExp(r'\s+'), ' ');
 
             // Ονοματεπώνυμο / Όνομα / Πελάτης
-            if (header == 'ονοματεπωνυμο' ||
-                header == 'ονομα' ||
-                header == 'πελατης' ||
-                header == 'πελατησ') {
+            // Ονοματεπώνυμο / Όνομα / Πελάτης / Επώνυμο
+if (header == 'ονοματεπώνυμο' || 
+    header == 'όνομα' || 
+    header == 'επωνυμο' || // <-- Πρόσθεσε αυτή τη γραμμή
+    header == 'πελάτης' || 
+    header == 'πελατης') {
+  foundNameColumn = columnIndex;
+}
+{
               foundNameColumn = columnIndex;
             }
 
             // Τηλέφωνο
-            if (header == 'τηλεφωνο' ||
-                header == 'κινητο' ||
-                header == 'τηλεφωνο επικοινωνιας' ||
-                header == 'τηλεφωνο επικοινωνιασ') {
-              foundPhoneColumn = columnIndex;
-            }
+            // Τηλέφωνο / Κινητό / Κινιτα
+if (header == 'τηλέφωνο' || 
+    header == 'κινητό' || 
+    header == 'κινιτα' || // <-- Πρόσθεσε αυτή τη γραμμή
+    header == 'τηλεφωνο επικοινωνιας') {
+  foundPhoneColumn = columnIndex;
+}
+
 
             // Διεύθυνση
-            if (header == 'διευθυνση' ||
-                header == 'διευθυνση κατοικιας' ||
-                header == 'διευθυνση κατοικιασ') {
-              foundAddressColumn = columnIndex;
-            }
+            // Διεύθυνση / Περιοχή
+if (header == 'διεύθυνση' || header == 'διευθυνση') {
+  foundAddressColumn = columnIndex;
+}
+
 
             // Στήλες ιστορικού αλληλεπιδράσεων
             if (header == 'τυπος') {
