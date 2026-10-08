@@ -533,7 +533,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
   // EXCEL IMPORT
   // ----------------------------------------------------------
 
-  Future<void> _importFromExcel() async {
+    Future<void> _importFromExcel() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -552,50 +552,240 @@ class _ClientListScreenState extends State<ClientListScreen> {
       final excel = Excel.decodeBytes(bytes);
 
       int importedCount = 0;
+      int skippedCount = 0;
 
-      // Εισάγουμε μόνο από το φύλλο Clients.
-      final sheet = excel.tables['Clients'];
+      // --------------------------------------------------------
+      // ΔΙΑΒΑΖΟΥΜΕ ΟΛΑ ΤΑ ΦΥΛΛΑ ΤΟΥ EXCEL
+      // --------------------------------------------------------
 
-      if (sheet == null) {
-        throw Exception(
-          'Δεν βρέθηκε φύλλο με όνομα Clients.',
-        );
-      }
+      for (final sheetName in excel.tables.keys) {
+        final sheet = excel.tables[sheetName];
 
-      for (int i = 1; i < sheet.rows.length; i++) {
-        final row = sheet.rows[i];
-
-        if (row.isEmpty) {
+        if (sheet == null || sheet.rows.isEmpty) {
           continue;
         }
 
-        final name = row.length > 1
-            ? row[1]?.value?.toString().trim() ?? ''
-            : '';
+        int headerRowIndex = -1;
+        int nameColumn = -1;
+        int phoneColumn = -1;
+        int addressColumn = -1;
 
-        final phone = row.length > 2
-            ? row[2]?.value?.toString().trim() ?? ''
-            : '';
+        bool hasInteractionType = false;
+        bool hasInteractionDate = false;
+        bool hasInteractionTime = false;
+        bool hasInteractionComment = false;
+        bool hasClientId = false;
 
-        final address = row.length > 3
-            ? row[3]?.value?.toString().trim() ?? ''
-            : '';
+        // ------------------------------------------------------
+        // ΕΝΤΟΠΙΣΜΟΣ ΕΠΙΚΕΦΑΛΙΔΩΝ
+        // ------------------------------------------------------
 
-        if (name.isEmpty) {
+        for (int rowIndex = 0;
+            rowIndex < sheet.rows.length;
+            rowIndex++) {
+          final row = sheet.rows[rowIndex];
+
+          int foundNameColumn = -1;
+          int foundPhoneColumn = -1;
+          int foundAddressColumn = -1;
+
+          bool foundInteractionType = false;
+          bool foundInteractionDate = false;
+          bool foundInteractionTime = false;
+          bool foundInteractionComment = false;
+          bool foundClientId = false;
+
+          for (int columnIndex = 0;
+              columnIndex < row.length;
+              columnIndex++) {
+            String value = row[columnIndex]
+                    ?.value
+                    ?.toString()
+                    .trim() ??
+                '';
+
+            String header = value
+                .toLowerCase()
+                .replaceAll('ά', 'α')
+                .replaceAll('έ', 'ε')
+                .replaceAll('ή', 'η')
+                .replaceAll('ί', 'ι')
+                .replaceAll('ό', 'ο')
+                .replaceAll('ύ', 'υ')
+                .replaceAll('ώ', 'ω')
+                .replaceAll('ϊ', 'ι')
+                .replaceAll('ΐ', 'ι')
+                .replaceAll('ϋ', 'υ')
+                .replaceAll('ΰ', 'υ')
+                .replaceAll(RegExp(r'\s+'), ' ');
+
+            // Ονοματεπώνυμο / Όνομα / Πελάτης
+            if (header == 'ονοματεπωνυμο' ||
+                header == 'ονομα' ||
+                header == 'πελατης' ||
+                header == 'πελατησ') {
+              foundNameColumn = columnIndex;
+            }
+
+            // Τηλέφωνο
+            if (header == 'τηλεφωνο' ||
+                header == 'κινητο' ||
+                header == 'τηλεφωνο επικοινωνιας' ||
+                header == 'τηλεφωνο επικοινωνιασ') {
+              foundPhoneColumn = columnIndex;
+            }
+
+            // Διεύθυνση
+            if (header == 'διευθυνση' ||
+                header == 'διευθυνση κατοικιας' ||
+                header == 'διευθυνση κατοικιασ') {
+              foundAddressColumn = columnIndex;
+            }
+
+            // Στήλες ιστορικού αλληλεπιδράσεων
+            if (header == 'τυπος') {
+              foundInteractionType = true;
+            }
+
+            if (header == 'ημερομηνια') {
+              foundInteractionDate = true;
+            }
+
+            if (header == 'ωρα') {
+              foundInteractionTime = true;
+            }
+
+            if (header == 'σχολιο') {
+              foundInteractionComment = true;
+            }
+
+            if (header == 'client id') {
+              foundClientId = true;
+            }
+          }
+
+          if (foundNameColumn != -1) {
+            headerRowIndex = rowIndex;
+            nameColumn = foundNameColumn;
+            phoneColumn = foundPhoneColumn;
+            addressColumn = foundAddressColumn;
+
+            hasInteractionType = foundInteractionType;
+            hasInteractionDate = foundInteractionDate;
+            hasInteractionTime = foundInteractionTime;
+            hasInteractionComment = foundInteractionComment;
+            hasClientId = foundClientId;
+
+            break;
+          }
+        }
+
+        if (headerRowIndex == -1 ||
+            nameColumn == -1) {
           continue;
         }
 
-        _clients.add(
-          Client(
-            id: generateId(),
-            fullName: name,
-            phone: phone,
-            address: address,
-            createdDate: DateTime.now(),
-          ),
-        );
+        // ------------------------------------------------------
+        // ΔΕΝ ΕΙΣΑΓΟΥΜΕ ΦΥΛΛΑ ΙΣΤΟΡΙΚΟΥ
+        // ------------------------------------------------------
 
-        importedCount++;
+        final isInteractionSheet =
+            hasClientId ||
+            (hasInteractionType &&
+                (hasInteractionDate ||
+                    hasInteractionTime ||
+                    hasInteractionComment));
+
+        if (isInteractionSheet) {
+          continue;
+        }
+
+        // ------------------------------------------------------
+        // ΕΙΣΑΓΩΓΗ ΠΕΛΑΤΩΝ
+        // ------------------------------------------------------
+
+        for (int rowIndex = headerRowIndex + 1;
+            rowIndex < sheet.rows.length;
+            rowIndex++) {
+          final row = sheet.rows[rowIndex];
+
+          if (row.isEmpty ||
+              nameColumn >= row.length) {
+            continue;
+          }
+
+          final name = row[nameColumn]
+                  ?.value
+                  ?.toString()
+                  .trim() ??
+              '';
+
+          if (name.isEmpty) {
+            continue;
+          }
+
+          String phone = '';
+
+          if (phoneColumn != -1 &&
+              phoneColumn < row.length) {
+            phone = row[phoneColumn]
+                    ?.value
+                    ?.toString()
+                    .trim() ??
+                '';
+          }
+
+          String address = '';
+
+          if (addressColumn != -1 &&
+              addressColumn < row.length) {
+            address = row[addressColumn]
+                    ?.value
+                    ?.toString()
+                    .trim() ??
+                '';
+          }
+
+          final normalizedName = removeAccents(name);
+
+          // ----------------------------------------------------
+          // ΕΛΕΓΧΟΣ ΔΙΠΛΟΤΥΠΩΝ
+          // ----------------------------------------------------
+
+          final alreadyExists = _clients.any((client) {
+            final existingName =
+                removeAccents(client.fullName);
+
+            final sameName =
+                existingName == normalizedName;
+
+            if (phone.isNotEmpty) {
+              final samePhone =
+                  client.phone.trim() == phone;
+
+              return sameName && samePhone;
+            }
+
+            return sameName;
+          });
+
+          if (alreadyExists) {
+            skippedCount++;
+            continue;
+          }
+
+          _clients.add(
+            Client(
+              id: generateId(),
+              fullName: name,
+              phone: phone,
+              address: address,
+              createdDate: DateTime.now(),
+            ),
+          );
+
+          importedCount++;
+        }
       }
 
       await _saveClients();
@@ -603,11 +793,17 @@ class _ClientListScreenState extends State<ClientListScreen> {
       if (mounted) {
         setState(() {});
 
+        String message =
+            'Εισήχθησαν $importedCount πελάτες.';
+
+        if (skippedCount > 0) {
+          message +=
+              ' Παραλείφθηκαν $skippedCount διπλότυπα.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Εισήχθησαν $importedCount πελάτες.',
-            ),
+            content: Text(message),
           ),
         );
       }
