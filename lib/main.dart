@@ -628,9 +628,6 @@ if (header == 'ονοματεπώνυμο' ||
     header == 'πελατης') {
   foundNameColumn = columnIndex;
 }
-{
-              foundNameColumn = columnIndex;
-            }
 
             // Τηλέφωνο
             // Τηλέφωνο / Κινητό / Κινιτα
